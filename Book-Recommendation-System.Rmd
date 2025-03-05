@@ -1,0 +1,426 @@
+---
+title: "Book Recommendation System"
+output: html_document
+date: "2024-03-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+For the initial phase of your project involving the construction of a book recommendation system, you are focusing on conducting an Exploratory Data Analysis (EDA). This fundamental step will involve a comprehensive examination and analysis of the dataset's features or variables. 
+
+As part of our project, we are developing a book recommendation system. We have sourced our dataset from https://www.kaggle.com/datasets/arashnic/book-recommendation-dataset/code?datasetId=1004280&searchQuery=EDA
+
+The first phase of our project is dedicated to performing an Exploratory Data Analysis (EDA). This process consists of  a thorough examination and analysis of the dataset's variables. Our EDA aims to explore the distribution of variables, investigate the interactions among them, identify and analyze outliers, and address missing values. We will conduct uni-variate, bi-variate, and multi-variate analyses to gain a deep understanding of the data, setting a solid foundation for developing an effective recommendation system.
+
+So let us propose the agenda of our work pertaining to EDA:
+
+1. Printing the first 5 rows of dataframe
+2. Display the size of each dataframe
+3. Inspection of null values present.
+4. 
+
+Let's load in any required packages here (make sure to install them first)
+```{r loadingPackages}
+require(dplyr)
+require(readr)
+require(caret)
+require(pROC)
+
+set.seed(1)
+
+books = read_csv('/Users/tejk/Desktop/AA/task 3/datasets/Books.csv')
+ratings  = read_csv('/Users/tejk/Desktop/AA/task 3/datasets/Ratings.csv')
+users=read_csv('/Users/tejk/Desktop/AA/task 3/datasets/Users.csv')
+```
+
+Let us print the first five rows of each dataframe:
+
+```{r}
+#Printing the first five rows of books dataframe
+head(books, n = 5)
+```
+```{r}
+#Printing the first five rows of books dataframe
+head(ratings, n = 5)
+```
+
+```{r}
+#Printing the first five rows of books dataframe
+head(users, n = 5)
+```
+2. Printing the size of each dataframe
+
+```{r}
+
+
+# Or using nrow() and ncol() for a more detailed approach
+print(paste("Ratings: Rows =", nrow(ratings), "Columns =", ncol(ratings)))
+print(paste("Users: Rows =", nrow(users), "Columns =", ncol(users)))
+print(paste("Books: Rows =", nrow(books), "Columns =", ncol(books)))
+
+```
+3. Let us inspect the Ratings dataset. We shall visualize the following: Rating Distribution and Average Ratings per Book
+But before that let us get the percentage of missing values for ratings dataset.
+
+```{r}
+
+total_rows <- nrow(ratings)
+missing_values <- colSums(is.na(ratings))
+percentage_missing <- (missing_values / total_rows) * 100
+
+# Display the percentage of missing values for each column
+print(percentage_missing)
+
+```
+There are no missing values for ratings data!
+
+```{r}
+
+total_rows <- nrow(users)
+missing_values <- colSums(is.na(users))
+percentage_missing <- (missing_values / total_rows) * 100
+
+# Display the percentage of missing values for each column
+print(percentage_missing)
+
+```
+
+
+```{r}
+
+total_rows <- nrow(books)
+missing_values <- colSums(is.na(books))
+percentage_missing <- (missing_values / total_rows) * 100
+
+# Display the percentage of missing values for each column
+print(percentage_missing)
+
+```
+
+3.a) Rating Distribution
+
+```{r}
+#Converting the rating column to numeric type
+# Correct way to convert 'Book-Rating' to numeric
+ratings$`Book-Rating` <- as.numeric(as.character(ratings$`Book-Rating`))
+
+# Correct ggplot call
+library(ggplot2)
+library(scales) # For label_number()
+
+ggplot(ratings, aes(x=`Book-Rating`)) +
+  geom_histogram(binwidth=0.5, fill="blue", color="black") +
+  theme_minimal() +
+  labs(title="Distribution of Book Ratings", x="Rating", y="Frequency") +
+  scale_y_continuous(labels = label_number())
+
+
+
+```
+Mostly users rated 0
+
+3.b Diplaying top-10 highest average ratting per book
+```{r}
+# Calculate average rating per book
+avg_ratings <- ratings %>%
+  group_by(ISBN) %>%
+  summarise(AverageRating = mean('Book-Rating'))
+
+# Top 10 highest rated books (filtering out books with very few ratings might be necessary)
+top_rated <- avg_ratings %>%
+  arrange(desc(AverageRating)) %>%
+  head(10)
+
+# Bar plot for top rated books
+ggplot(top_rated, aes(x=reorder(ISBN, -AverageRating), y=AverageRating)) +
+  geom_bar(stat="identity", fill="coral") +
+  theme_minimal() +
+  labs(title="Top 10 Highest Rated Books", x="ISBN", y="Average Rating") +
+  coord_flip()
+
+```
+Let us inspect the users dataframe
+
+ 1.First let us plot the percentage of missing values of columns present in this datafram
+
+```{r}
+
+missing_percentage <- colSums(is.na(users)) / nrow(users) * 100
+
+missing_df <- data.frame(Column = names(missing_percentage), MissingPercentage = missing_percentage)
+
+# Plot
+ggplot(missing_df, aes(x=Column, y=MissingPercentage)) +
+  geom_bar(stat="identity", fill="tomato") +
+  theme_minimal() +
+  labs(title="Percentage of Missing Values by Column in Users Dataset", x="Column", y="Percentage Missing") +
+  coord_flip()
+
+```
+Only the age column is missing and the missing percentage is 40.
+
+2. If we focus on the location column, we can extract the country alone and plot the histogram of frequency.
+
+```{r}
+
+#We know that the country is obtained by splitting based on comma and extracting the third, i.,e last string. 
+users$Country <- sapply(strsplit(as.character(users$Location), ","), function(x) trimws(x[length(x)]))
+
+ #Get the country counts
+country_counts <- table(users$Country)
+#Plotting only top-10 countries
+
+# Convert to dataframe for plotting
+# Convert the table of country counts to a dataframe for plotting
+country_df <- as.data.frame(country_counts, stringsAsFactors = FALSE)
+names(country_df) <- c("Country", "Count")
+
+# Sorting and selecting the top 10 countries for a cleaner plot
+top_countries_df <- head(country_df[order(-country_df$Count),], 10)
+
+# Plotting the top 10 countries
+ggplot(top_countries_df, aes(x=reorder(Country, Count), y=Count)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_text(aes(label=Count), position=position_dodge(width=0.9), hjust=-0.1, vjust=0.5) +
+  theme_minimal() +
+  labs(title="Top 10 Countries by User Count", x="Country", y="Count") +
+  coord_flip()
+```
+Now let us plot the age distribution:
+```{r}
+# Plotting the age distribution
+ggplot(users, aes(x=Age)) +
+  geom_histogram(binwidth=5, fill="cornflowerblue", color="black") +
+  theme_minimal() +
+  labs(title="Age Distribution of Users", x="Age", y="Frequency") +
+  xlim(c(0, 100))
+
+```
+Let us make use of both the age and country columns to gather some visualizations
+
+```{r}
+top_countries <- users %>%
+  group_by(Country) %>%
+  summarise(UserCount = n()) %>%
+  arrange(desc(UserCount)) %>%
+  top_n(10, UserCount) %>%
+  pull(Country)
+
+# Step 2: Filter the dataset to include only users from the top 10 countries
+users_top_countries <- users %>%
+  filter(Country %in% top_countries)
+
+# Step 3: Create the box plot
+ggplot(users_top_countries, aes(x=Country, y=Age)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title="Age Distribution in Top 10 Countries", x="Country", y="Age") +
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+```
+
+
+Considering the issues identified with the age column, we have decided to exclude it from further analysis for the following reasons:
+
+1. Over 40% of the data in the age column are missing, which significantly undermines its reliability and the comprehensiveness of any analysis derived from it.
+
+2. The presence of extreme outliers, specifically age values greater than 120, further compromises the integrity of the dataset and could lead to skewed analyses and interpretations.
+
+Now let us inspect the dataframe concerning books
+
+As usual let us begin by inspecting the missing values in this dataframe.
+
+```{r}
+
+missing_percentage <- sapply(books, function(x) sum(is.na(x)) / length(x) * 100)
+missing_percentage
+```
+
+No missing values present!
+
+Let us now plot the top-20 authors by number of books
+
+```{r}
+top_authors <- books %>%
+  filter(!is.na(`Book-Author`)) %>%  # Corrected reference to "Book-Author"
+  group_by(`Book-Author`) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  top_n(20, Count) %>%
+  arrange(desc(Count))
+
+# Now, plotting the corrected data
+ggplot(top_authors, aes(x=reorder(`Book-Author`, Count), y=Count)) +
+  geom_bar(stat="identity") +
+  geom_text(aes(label=Count), position=position_stack(vjust=0.5), color="white") +
+  theme_minimal() +
+  coord_flip() +
+  labs(title="Top 20 Authors by Number of Books", x="Author", y="Number of Books")
+```
+
+Plotting the top 20 publishers
+
+
+```{r}
+
+top_publishers <- books %>%
+  group_by(Publisher) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  top_n(20, Count) %>%
+  arrange(desc(Count))
+
+# Plotting
+ggplot(top_publishers, aes(x=reorder(Publisher, Count), y=Count)) +
+  geom_bar(stat="identity", fill="coral") +
+  geom_text(aes(label=Count), position=position_stack(vjust=0.5), color="white") + # Adding text labels inside the bars
+  theme_minimal() +
+  coord_flip() +
+  labs(title="Top 20 Publishers by Number of Books", x="Publisher", y="Number of Books")
+
+```
+
+Let us look at the year trend of publication
+
+```{r}
+# Group by Year of Publication and count the number of books
+books_filtered <- books %>%
+  filter(`Year-Of-Publication` >= 1950 & `Year-Of-Publication` <= 2010) %>%
+  mutate(`Year-Of-Publication` = as.numeric(as.character(`Year-Of-Publication`))) # Ensure the year is numeric
+
+# Count the number of books published each year
+year_count <- books_filtered %>%
+  group_by(`Year-Of-Publication`) %>%
+  summarise(Count = n()) %>%
+  arrange(`Year-Of-Publication`)
+
+# Plotting the trend of book publications over the years
+ggplot(year_count, aes(x=`Year-Of-Publication`, y=Count)) +
+  geom_line(color="steelblue") +  # Draw the trend line
+  geom_point(color="darkred", size=2, alpha=0.6) +  # Add points for each year
+  theme_minimal() +  # Use a minimal theme
+  labs(title="Year of Publication Count (1950 - 2010)",
+       x="Year", y="Total Books Published") +
+  xlim(1950, 2010)  # Set the x-axis limits
+
+```
+
+The trend observed in the publication data is interesting, revealing a sudden spike in book publications post-1980, with an all-time high around the year 2000. This surge can likely be attributed to the advent of the internet and the emergence of e-commerce platforms such as Amazon, which significantly boosted the book industry. Subsequently, there appears to be a notable decline in publications after roughly 2005. This decrease might be due to the introduction and increasing popularity of alternative media formats, such as video and audiobooks, which diversified consumers' options for content consumption.
+
+EDA Part-2:
+
+Now let us combine two datasets: ratings and books and ratings and users separately and try answering the following questions:
+
+1. Authors trend with the highest rated.
+2. Publisher trend with the highest rated.
+3. Books trend with the most rated.
+
+
+Now let us combine Books and Ratings dataframe together to draw some aforementioned insights
+
+```{r}
+#Merge both the dataframes
+
+# Left join 'books' with 'ratings' on the 'ISBN' column
+books_ratings <- merge(books, ratings, by = "ISBN")
+```
+
+1. Let us plot the top-20 average rating
+
+```{r}
+# Get the top 20 authors by book count
+authors_top20 <- books %>%
+  count(`Book-Author`, sort = TRUE) %>%
+  top_n(20, n) %>%
+  pull(`Book-Author`)
+
+# Filter 'books' to include only the top 20 authors
+books_top20 <- books %>%
+  filter(`Book-Author` %in% authors_top20)
+
+# Excluding NA ratings
+books_with_ratings <- left_join(books_top20, ratings, by = "ISBN") %>%
+  filter(!is.na(`Book-Rating`), `Book-Rating` != 0)
+
+# Calculate the average rating for the top 20 authors
+top20_author_ratings <- books_with_ratings %>%
+  group_by(`Book-Author`) %>%
+  summarise(AverageRating = mean(`Book-Rating`, na.rm = TRUE)) %>%
+  ungroup() %>%
+  arrange(desc(AverageRating))
+
+# Display the top 20 authors with their average rating
+#top20_author_ratings
+# Plot the average ratings for the top 20 authors
+ggplot(top20_author_ratings, aes(x=reorder(`Book-Author`, AverageRating), y=AverageRating, fill=AverageRating)) +
+  geom_bar(stat="identity") +
+   geom_text(aes(label=round(AverageRating,1)), 
+            position=position_dodge(width=0.9),  # Adjust position to fit within the bars
+            hjust=1.1,                           # Adjust 
+            color="black",                        # Text color
+            size=3) + 
+  coord_flip() +  # Flip the plot to make it horizontal
+  theme_minimal() +
+  scale_fill_gradient(low = "blue", high = "red") +  # Optional: color gradient based on rating
+  labs(title="Average Rating of Top 20 Authors", x="Author", y="Average Rating")
+  
+```
+2. Publisher trend with the highest rated.
+
+```{r}
+## Identify the top 20 publishers by book count
+publishers_top20 <- books %>%
+  count(Publisher, sort = TRUE) %>%
+  top_n(20, n) %>%
+  pull(Publisher)
+
+top20_publishers_books <- books_ratings %>%
+  filter(Publisher %in% publishers_top20 & `Book-Rating` > 0)
+# Calculate average rating for each of the top 20 publishers
+top20_publishers_avg_rating <- top20_publishers_books %>%
+  group_by(Publisher) %>%
+  summarise(AverageRating = mean(`Book-Rating`, na.rm = TRUE)) %>%
+  ungroup() %>%
+  arrange(desc(AverageRating))
+# Plot the average ratings for the top 20 publishers with numbers on the bars
+ggplot(top20_publishers_avg_rating, aes(x=reorder(Publisher, AverageRating), y=AverageRating)) +
+  geom_bar(stat="identity", fill="lightblue") +
+  geom_text(aes(label=round(AverageRating, 1)), position=position_dodge(width=0.9), hjust=-0.1, vjust=0, color="black", size=3) +
+  coord_flip() +
+  theme_minimal() +
+  labs(title="Average Rating of Books from Top 20 Publishers", x="Publisher", y="Average Rating")
+
+```
+
+3. Books with the highest average ratings
+
+```{r}
+# Identify the top 20 most frequently occurring books
+# Get the top 20 books by occurrence in the dataset
+books_top20 <- books %>%
+  count(`Book-Title`, sort = TRUE) %>%
+  top_n(20, n) %>%
+  pull(`Book-Title`)
+
+# Filter the merged dataset for these top 20 books and exclude zero ratings
+top20_books <- books_ratings %>%
+  filter(`Book-Title` %in% books_top20 & `Book-Rating` > 0)
+
+# Calculate average ratings for these top 20 books
+top20_books_avg_rating <- top20_books %>%
+  group_by(`Book-Title`) %>%
+  summarise(AverageRating = mean(`Book-Rating`, na.rm = TRUE)) %>%
+  ungroup() %>%
+  arrange(desc(AverageRating))
+
+# Now select the top 10 books based on their average rating
+top10_books <- head(top20_books_avg_rating, 10)
+
+# Plot the average ratings for the top 10 books
+ggplot(top10_books, aes(x=reorder(`Book-Title`, AverageRating), y=AverageRating)) +
+  geom_col(fill="lightblue") +
+  geom_text(aes(label=sprintf("%.1f", AverageRating)), position=position_dodge(width=0.9), hjust=-0.1, vjust=0, color="black", size=3) +
+  coord_flip() +
+  theme_minimal() +
+  labs(title="Average Rating of Top 10 Books", x="Book Title", y="Average Rating")
+```
+
+
